@@ -1,0 +1,56 @@
+[
+  {
+    "block_id": "dataset",
+    "type": "dataset",
+    "params": {
+      "file_path": "examples/datasets/churn.csv",
+      "target": "churn"
+    },
+    "inputs": [],
+    "outputs": ["df"]
+  },
+  {
+    "block_id": "split",
+    "type": "split",
+    "params": {
+      "test_size": 0.2,
+      "stratify": true
+    },
+    "inputs": ["dataset"],
+    "outputs": ["split_data"]
+  },
+  {
+    "block_id": "features",
+    "type": "feature_pipeline",
+    "params": {},
+    "inputs": ["split"],
+    "outputs": ["features"]
+  },
+  {
+    "block_id": "model",
+    "type": "model",
+    "params": {
+      "task": "classification",
+      "hyperparams": {
+        "n_estimators": 50,
+        "max_depth": 5
+      }
+    },
+    "inputs": ["features"],
+    "outputs": ["model"]
+  },
+  {
+    "block_id": "trainer",
+    "type": "trainer",
+    "params": {},
+    "inputs": ["model"],
+    "outputs": ["trained_model"]
+  },
+  {
+    "block_id": "metrics",
+    "type": "metrics",
+    "params": {},
+    "inputs": ["trainer"],
+    "outputs": ["metrics"]
+  }
+]
