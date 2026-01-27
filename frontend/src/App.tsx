@@ -1,7 +1,10 @@
+import { ReactFlowProvider } from "reactflow";
 import PipelineCanvas from "./canvas/PipelineCanvas";
 
-function App() {
-  return <PipelineCanvas />;
+export default function App() {
+  return (
+    <ReactFlowProvider>
+      <PipelineCanvas />
+    </ReactFlowProvider>
+  );
 }
-
-export default App;
