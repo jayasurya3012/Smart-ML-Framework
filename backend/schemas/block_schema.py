@@ -16,3 +16,10 @@ class Block(BaseModel):
     params: Dict[str, Any]
     inputs: List[str]
     outputs: List[str]
+
+class PipelineBlock(BaseModel):
+    id: str
+    type: str
+    params: Dict[str, Any] = {}
+    inputs: List[str] = []   # ✅ ADD THIS
+    outputs: List[str] = []

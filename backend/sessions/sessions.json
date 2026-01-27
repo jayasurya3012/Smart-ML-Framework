@@ -1,0 +1,126 @@
+[
+  {
+    "id": "3f33ba53",
+    "name": "Pipeline 1",
+    "created_at": "2026-01-27T12:41:37.940059",
+    "updated_at": "2026-01-27T12:42:57.095396",
+    "data": {
+      "nodes": [
+        {
+          "id": "split_1769542895074",
+          "type": "block",
+          "position": {
+            "x": 100.0,
+            "y": 220.0
+          },
+          "data": {
+            "label": "SPLIT",
+            "blockType": "split",
+            "params": {
+              "test_size": 0.2
+            }
+          }
+        },
+        {
+          "id": "model_1769542895498",
+          "type": "block",
+          "position": {
+            "x": 100.0,
+            "y": 340.0
+          },
+          "data": {
+            "label": "MODEL",
+            "blockType": "model",
+            "params": {
+              "task": "classification",
+              "n_estimators": 100,
+              "max_depth": 10
+            }
+          }
+        },
+        {
+          "id": "trainer_1769542895940",
+          "type": "block",
+          "position": {
+            "x": 100.0,
+            "y": 460.0
+          },
+          "data": {
+            "label": "TRAINER",
+            "blockType": "trainer",
+            "params": {
+              "fit_params": {}
+            }
+          }
+        },
+        {
+          "id": "metrics_1769542896888",
+          "type": "block",
+          "position": {
+            "x": 100.0,
+            "y": 580.0
+          },
+          "data": {
+            "label": "METRICS",
+            "blockType": "metrics",
+            "params": {}
+          }
+        },
+        {
+          "id": "dataset_1769542929637",
+          "type": "block",
+          "position": {
+            "x": 15.0,
+            "y": 60.0
+          },
+          "data": {
+            "label": "DATASET",
+            "blockType": "dataset",
+            "params": {
+              "file_path": "C:\\Users\\jayas\\Desktop\\Smart-ML-Framework\\backend\\uploads\\62b1abd3_churn.csv",
+              "filename": "churn.csv",
+              "columns": [
+                "age",
+                "monthly_charges",
+                "tenure",
+                "churn"
+              ],
+              "rows": 5,
+              "target": "churn"
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "reactflow__edge-split_1769542895074-model_1769542895498",
+          "source": "split_1769542895074",
+          "target": "model_1769542895498",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "reactflow__edge-model_1769542895498-trainer_1769542895940",
+          "source": "model_1769542895498",
+          "target": "trainer_1769542895940",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "reactflow__edge-trainer_1769542895940-metrics_1769542896888",
+          "source": "trainer_1769542895940",
+          "target": "metrics_1769542896888",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "reactflow__edge-dataset_1769542929637-split_1769542895074",
+          "source": "dataset_1769542929637",
+          "target": "split_1769542895074",
+          "sourceHandle": null,
+          "targetHandle": null
+        }
+      ]
+    }
+  }
+]
