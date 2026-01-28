@@ -175,3 +175,78 @@ export async function deleteSession(
 
   return response.json();
 }
+
+// ==================== Model API ====================
+
+export interface ModelInfo {
+  filename: string;
+  task: string;
+  trained_at: string;
+  n_samples: number;
+  n_features: number;
+  feature_names: string[];
+  target_name: string;
+  file_size_kb?: number;
+}
+
+export interface PredictResponse {
+  predictions: (number | string)[];
+  probabilities?: number[][];
+  n_samples: number;
+}
+
+export async function listModels(): Promise<{ models: ModelInfo[] }> {
+  const response = await fetch(`${API_BASE}/models`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch models");
+  }
+
+  return response.json();
+}
+
+export async function getModelInfo(filename: string): Promise<ModelInfo> {
+  const response = await fetch(`${API_BASE}/models/${filename}`);
+
+  if (!response.ok) {
+    throw new Error("Model not found");
+  }
+
+  return response.json();
+}
+
+export function getModelDownloadUrl(filename: string): string {
+  return `${API_BASE}/models/${filename}/download`;
+}
+
+export async function predictWithModel(
+  filename: string,
+  features: Record<string, any>[]
+): Promise<PredictResponse> {
+  const response = await fetch(`${API_BASE}/models/${filename}/predict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ features })
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(err);
+  }
+
+  return response.json();
+}
+
+export async function deleteModel(
+  filename: string
+): Promise<{ status: string; filename: string }> {
+  const response = await fetch(`${API_BASE}/models/${filename}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete model");
+  }
+
+  return response.json();
+}

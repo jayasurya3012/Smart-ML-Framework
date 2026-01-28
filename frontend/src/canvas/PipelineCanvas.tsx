@@ -20,8 +20,9 @@ import type { Session } from "../services/api";
 
 import BlockNode from "./BlockNode";
 import BlockConfigPanel from "../panels/BlockConfigPanel";
-import ResultsPanel from "../panels/ResultsPanel";
 import SessionPanel from "../panels/SessionPanel";
+import OutputPanel from "../panels/OutputPanel";
+import ChatPanel from "../panels/ChatPanel";
 
 /* -------------------- Types -------------------- */
 
@@ -33,15 +34,23 @@ type BlockNodeData = {
   params: Record<string, any>;
 };
 
+type ComparisonItem = {
+  actual: number | string;
+  predicted: number | string;
+};
+
 type PipelineResult = {
   status: "success" | "error";
   metrics?: Record<string, number>;
   predictions_preview?: number[];
+  comparison_preview?: ComparisonItem[];
   logs?: string[];
   error?: string;
+  model_id?: string;
+  model_filename?: string;
 };
 
-type PanelView = "config" | "results" | "sessions";
+type PanelView = "config" | "output" | "sessions" | "chat";
 
 /* -------------------- Node Types -------------------- */
 
@@ -66,7 +75,7 @@ export default function PipelineCanvas() {
   const isInitialLoadRef = useRef(true);
 
   /* Panel state */
-  const [panelView, setPanelView] = useState<PanelView>("results");
+  const [panelView, setPanelView] = useState<PanelView>("output");
 
   /* Results state */
   const [result, setResult] = useState<PipelineResult | null>(null);
@@ -180,7 +189,7 @@ export default function PipelineCanvas() {
 
     setSelectedNode(null);
     setResult(null);
-    setPanelView("results");
+    setPanelView("output");
 
     // Allow auto-save after a short delay
     setTimeout(() => {
@@ -198,7 +207,7 @@ export default function PipelineCanvas() {
     setEdges([]);
     setSelectedNode(null);
     setResult(null);
-    setPanelView("results");
+    setPanelView("output");
 
     setTimeout(() => {
       isInitialLoadRef.current = false;
@@ -268,7 +277,7 @@ export default function PipelineCanvas() {
       eds.filter((e) => e.source !== nodeId && e.target !== nodeId)
     );
     setSelectedNode(null);
-    setPanelView("results");
+    setPanelView("output");
   };
 
   /* Run pipeline */
@@ -295,7 +304,7 @@ export default function PipelineCanvas() {
       setIsRunning(true);
       setResult(null);
       setSelectedNode(null);
-      setPanelView("results");
+      setPanelView("output");
 
       const response = await runPipeline(pipeline);
 
@@ -303,7 +312,10 @@ export default function PipelineCanvas() {
         status: "success",
         metrics: response.metrics,
         predictions_preview: response.predictions_preview,
-        logs: response.logs
+        comparison_preview: response.comparison_preview,
+        logs: response.logs,
+        model_id: response.model_id,
+        model_filename: response.model_filename
       });
     } catch (err: any) {
       setResult({
@@ -444,6 +456,27 @@ export default function PipelineCanvas() {
 
             <div style={{ width: "1px", height: "28px", background: "#e5e7eb" }} />
 
+            {/* AI Assistant button */}
+            <button
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 12px",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: panelView === "chat" ? "#7c3aed" : "#374151",
+                background: panelView === "chat" ? "linear-gradient(135deg, #ede9fe 0%, #f3e8ff 100%)" : "#f3f4f6",
+                border: `1px solid ${panelView === "chat" ? "#c4b5fd" : "#e5e7eb"}`,
+                borderRadius: "8px",
+                cursor: "pointer"
+              }}
+              onClick={() => setPanelView(panelView === "chat" ? "output" : "chat")}
+            >
+              <span>*</span>
+              AI Assistant
+            </button>
+
             {/* History button */}
             <button
               style={{
@@ -459,7 +492,7 @@ export default function PipelineCanvas() {
                 borderRadius: "8px",
                 cursor: "pointer"
               }}
-              onClick={() => setPanelView(panelView === "sessions" ? "results" : "sessions")}
+              onClick={() => setPanelView(panelView === "sessions" ? "output" : "sessions")}
             >
               <span>📚</span>
               History
@@ -483,7 +516,7 @@ export default function PipelineCanvas() {
                 }}
                 onClick={() => {
                   setSelectedNode(null);
-                  setPanelView("results");
+                  setPanelView("output");
                 }}
               >
                 {result.status === "success" ? "✓ Results" : "⚠ Error"}
@@ -501,10 +534,14 @@ export default function PipelineCanvas() {
           nodeTypes={nodeTypes}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
+          onEdgeClick={(_, edge) => {
+            // Delete edge on click
+            setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+          }}
           onPaneClick={() => {
             setSelectedNode(null);
             if (panelView === "config") {
-              setPanelView("results");
+              setPanelView("output");
             }
           }}
           fitView
@@ -513,10 +550,12 @@ export default function PipelineCanvas() {
           nodesDraggable
           nodesConnectable
           elementsSelectable
+          edgesFocusable
           deleteKeyCode={["Backspace", "Delete"]}
           defaultEdgeOptions={{
             style: { strokeWidth: 2, stroke: "#94a3b8" },
-            type: "smoothstep"
+            type: "smoothstep",
+            interactionWidth: 20
           }}
         >
           <Background color="#e5e7eb" gap={20} />
@@ -537,8 +576,42 @@ export default function PipelineCanvas() {
           onLoadSession={loadSession}
           onNewSession={createNewSession}
         />
+      ) : panelView === "chat" ? (
+        <ChatPanel
+          nodes={nodes}
+          edges={edges}
+          onAddBlock={(type, params) => {
+            const id = `${type}_${Date.now()}`;
+            setNodes((nds) => [
+              ...nds,
+              {
+                id,
+                type: "block",
+                position: { x: 100, y: 100 + nds.length * 120 },
+                data: {
+                  label: type.toUpperCase(),
+                  blockType: type as BlockType,
+                  params: params || {}
+                }
+              }
+            ]);
+          }}
+          onRunPipeline={run}
+          datasetFilePath={
+            nodes.find((n) => n.data.blockType === "dataset")?.data.params?.file_path
+          }
+          targetColumn={
+            nodes.find((n) => n.data.blockType === "dataset")?.data.params?.target
+          }
+        />
       ) : (
-        <ResultsPanel result={result} isRunning={isRunning} />
+        <OutputPanel
+          nodes={nodes}
+          edges={edges}
+          result={result}
+          isRunning={isRunning}
+          onUpdateNodes={(updater) => setNodes(updater as any)}
+        />
       )}
     </div>
   );
