@@ -12,7 +12,7 @@ from utils.logger import logger
 # Default to environment variable, fallback to hardcoded for development
 GROQ_API_KEY = os.environ.get(
     "GROQ_API_KEY",
-    "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"
+    "your_GROQ_KEY"
 )
 
 
