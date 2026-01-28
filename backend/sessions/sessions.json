@@ -3,21 +3,21 @@
     "id": "3f33ba53",
     "name": "Pipeline 1",
     "created_at": "2026-01-27T12:41:37.940059",
-    "updated_at": "2026-01-27T12:42:57.095396",
+    "updated_at": "2026-01-28T00:04:07.518237",
     "data": {
       "nodes": [
         {
           "id": "split_1769542895074",
           "type": "block",
           "position": {
-            "x": 100.0,
-            "y": 220.0
+            "x": -45.0,
+            "y": 210.0
           },
           "data": {
             "label": "SPLIT",
             "blockType": "split",
             "params": {
-              "test_size": 0.2
+              "test_size": 0.3
             }
           }
         },
@@ -42,8 +42,8 @@
           "id": "trainer_1769542895940",
           "type": "block",
           "position": {
-            "x": 100.0,
-            "y": 460.0
+            "x": 390.0,
+            "y": 465.0
           },
           "data": {
             "label": "TRAINER",
@@ -71,22 +71,27 @@
           "type": "block",
           "position": {
             "x": 15.0,
-            "y": 60.0
+            "y": 45.0
           },
           "data": {
             "label": "DATASET",
             "blockType": "dataset",
             "params": {
-              "file_path": "C:\\Users\\jayas\\Desktop\\Smart-ML-Framework\\backend\\uploads\\62b1abd3_churn.csv",
-              "filename": "churn.csv",
+              "file_path": "C:\\Users\\jayas\\Desktop\\Smart-ML-Framework\\backend\\uploads\\3ca900fd_diabetes.csv",
+              "filename": "diabetes.csv",
               "columns": [
-                "age",
-                "monthly_charges",
-                "tenure",
-                "churn"
+                "Pregnancies",
+                "Glucose",
+                "BloodPressure",
+                "SkinThickness",
+                "Insulin",
+                "BMI",
+                "DiabetesPedigreeFunction",
+                "Age",
+                "Outcome"
               ],
-              "rows": 5,
-              "target": "churn"
+              "rows": 768,
+              "target": "Outcome"
             }
           }
         }

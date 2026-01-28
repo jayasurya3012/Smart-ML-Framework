@@ -29,7 +29,7 @@ def execute_dataset_block(block, context):
             detail=f"Target column '{target}' not found in dataset"
         )
 
-    # 🔥 THIS IS THE IMPORTANT PART
+    # Separate features and target
     X = df.drop(columns=[target])
     y = df[target]
 
@@ -37,5 +37,7 @@ def execute_dataset_block(block, context):
     context["X"] = X
     context["y"] = y
     context["target"] = target
+    context["feature_names"] = X.columns.tolist()
+    context["target_name"] = target
 
     return context
