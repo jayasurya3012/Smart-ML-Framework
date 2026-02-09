@@ -1,18 +1,10 @@
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Any
 from pydantic import BaseModel
 
-BlockType = Literal[
-    "dataset",
-    "split",
-    "feature_pipeline",
-    "model",
-    "metrics",
-    "trainer"
-]
 
 class Block(BaseModel):
     block_id: str
-    type: BlockType
+    type: str  # Accepts built-in and custom block types
     params: Dict[str, Any]
     inputs: List[str]
     outputs: List[str]
@@ -21,5 +13,5 @@ class PipelineBlock(BaseModel):
     id: str
     type: str
     params: Dict[str, Any] = {}
-    inputs: List[str] = []   # ✅ ADD THIS
+    inputs: List[str] = []
     outputs: List[str] = []

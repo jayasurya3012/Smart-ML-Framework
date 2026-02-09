@@ -12,7 +12,7 @@ from utils.logger import logger
 # Default to environment variable, fallback to hardcoded for development
 GROQ_API_KEY = os.environ.get(
     "GROQ_API_KEY",
-    "your_GROQ_KEY"
+    ""
 )
 
 
@@ -83,6 +83,48 @@ class GroqService:
         response = self.chat(messages, model, temperature)
         return self._extract_json(response)
 
+    def _fix_json_newlines(self, text: str) -> str:
+        """Escape literal newlines/tabs inside JSON string values.
+
+        LLMs often produce JSON with real newline characters inside strings
+        (e.g. multi-line code). JSON requires \\n instead of actual newlines
+        inside string values. This fixes that while preserving whitespace
+        between JSON properties.
+        """
+        result = []
+        in_string = False
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            # Handle escape sequences inside strings
+            if in_string and ch == '\\':
+                result.append(ch)
+                if i + 1 < len(text):
+                    i += 1
+                    result.append(text[i])
+                i += 1
+                continue
+            # Toggle string state on unescaped quote
+            if ch == '"':
+                in_string = not in_string
+                result.append(ch)
+                i += 1
+                continue
+            # Fix literal newlines/tabs inside strings
+            if in_string:
+                if ch == '\n':
+                    result.append('\\n')
+                elif ch == '\r':
+                    result.append('\\r')
+                elif ch == '\t':
+                    result.append('\\t')
+                else:
+                    result.append(ch)
+            else:
+                result.append(ch)
+            i += 1
+        return ''.join(result)
+
     def _extract_json(self, text: str) -> Dict[str, Any]:
         """Extract JSON from LLM response text."""
         # Try direct parse first
@@ -94,22 +136,34 @@ class GroqService:
         # Try to find JSON in code blocks
         code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
         if code_block_match:
+            json_text = code_block_match.group(1)
             try:
-                return json.loads(code_block_match.group(1))
+                return json.loads(json_text)
+            except json.JSONDecodeError:
+                pass
+            # Try fixing newlines inside strings
+            try:
+                return json.loads(self._fix_json_newlines(json_text))
             except json.JSONDecodeError:
                 pass
 
-        # Try to find JSON object pattern
+        # Try to find JSON object pattern (greedy -- outermost braces)
         json_match = re.search(r'\{[\s\S]*\}', text)
         if json_match:
+            json_text = json_match.group()
             try:
-                return json.loads(json_match.group())
+                return json.loads(json_text)
+            except json.JSONDecodeError:
+                pass
+            # Try fixing newlines inside strings
+            try:
+                return json.loads(self._fix_json_newlines(json_text))
             except json.JSONDecodeError:
                 pass
 
         # Return error structure if parsing fails
-        logger.warning("Failed to parse JSON from LLM response")
-        return {"error": "Failed to parse response", "raw": text}
+        logger.warning(f"Failed to parse JSON from LLM response ({len(text)} chars)")
+        return {"error": "Failed to parse response", "raw": text[:500]}
 
     def analyze_data(
         self,

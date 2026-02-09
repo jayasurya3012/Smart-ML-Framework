@@ -16,6 +16,18 @@ def execute_metrics_block(block, context):
     X_test = context["X_test"]
     y_test = context["y_test"]
 
+    # Handle X_test that needs preprocessing (categorical cols, missing values)
+    import pandas as pd
+    import numpy as np
+    if isinstance(X_test, pd.DataFrame):
+        if "feature_pipeline" in context:
+            # Apply the full preprocessing pipeline (includes imputation)
+            X_test = context["feature_pipeline"].transform(X_test)
+    elif isinstance(X_test, np.ndarray) and "numeric_imputer" in context:
+        # Handle numpy arrays with missing values
+        if np.isnan(X_test).any():
+            X_test = context["numeric_imputer"].transform(X_test)
+
     y_pred = model.predict(X_test)
 
     # Use task from context (set by model block) or fall back to block params
@@ -60,9 +72,22 @@ def execute_metrics_block(block, context):
         logger.info(f"MAE:  {mae:.4f}")
         logger.info(f"R2:   {r2:.4f}")
 
+    # Decode predictions back to original labels if label encoder was used
+    label_encoder = context.get("label_encoder")
+    if label_encoder is not None:
+        try:
+            y_pred_display = label_encoder.inverse_transform(y_pred).tolist()
+            y_actual_display = label_encoder.inverse_transform(y_test).tolist()
+        except Exception:
+            y_pred_display = y_pred.tolist()
+            y_actual_display = y_test.tolist() if hasattr(y_test, 'tolist') else list(y_test)
+    else:
+        y_pred_display = y_pred.tolist()
+        y_actual_display = y_test.tolist() if hasattr(y_test, 'tolist') else list(y_test)
+
     # Store predictions and actual values for comparison
-    context["y_pred"] = y_pred.tolist()
-    context["y_actual"] = y_test.tolist()
+    context["y_pred"] = y_pred_display
+    context["y_actual"] = y_actual_display
     context["metrics"] = result
 
     return context

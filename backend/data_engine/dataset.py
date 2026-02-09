@@ -40,4 +40,15 @@ def execute_dataset_block(block, context):
     context["feature_names"] = X.columns.tolist()
     context["target_name"] = target
 
+    # Store per-block output for multi-dataset merge support
+    if "datasets" not in context:
+        context["datasets"] = {}
+    context["datasets"][block.id] = {
+        "df": df,
+        "X": X,
+        "y": y,
+        "target": target,
+        "feature_names": X.columns.tolist()
+    }
+
     return context

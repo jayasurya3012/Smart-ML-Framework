@@ -1,0 +1,166 @@
+[
+  {
+    "name": "Remove Outliers (IQR)",
+    "type_key": "remove_outliers_iqr",
+    "description": "Remove outliers from the data using the Interquartile Range (IQR) method",
+    "icon": "\ud83d\udcca",
+    "color": "#87CEEB",
+    "category": "processing",
+    "param_schema": [
+      {
+        "name": "column",
+        "type": "select",
+        "default": null,
+        "description": "Select a column to remove outliers from. If null, all numeric columns will be processed.",
+        "options": "context.feature_names"
+      },
+      {
+        "name": "iqr_multiplier",
+        "type": "number",
+        "default": 1.5,
+        "description": "Multiplier for the IQR method. Data points with values outside of Q1 - iqr_multiplier * IQR and Q3 + iqr_multiplier * IQR will be considered outliers."
+      }
+    ],
+    "code": "\n# Get the column name and IQR multiplier from the block parameters\ncolumn = block.params.get('column')\niqr_multiplier = block.params.get('iqr_multiplier', 1.5)\n\n# Check if the 'df' key exists in the context\nif 'df' not in context:\n    raise ValueError('No data found in the context')\n\n# Get the DataFrame from the context\ndf = context['df']\n\n# If a column is specified, process only that column\nif column:\n    if column not in df.columns:\n        raise ValueError(f'Column {column} not found in the data')\n    Q1 = df[column].quantile(0.25)\n    Q3 = df[column].quantile(0.75)\n    IQR = Q3 - Q1\n    lower_bound = Q1 - iqr_multiplier * IQR\n    upper_bound = Q3 + iqr_multiplier * IQR\n    df = df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]\nelse:\n    # If no column is specified, process all numeric columns\n    numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns\n    for col in numeric_columns:\n        Q1 = df[col].quantile(0.25)\n        Q3 = df[col].quantile(0.75)\n        IQR = Q3 - Q1\n        lower_bound = Q1 - iqr_multiplier * IQR\n        upper_bound = Q3 + iqr_multiplier * IQR\n        df = df[(df[col] >= lower_bound) & (df[col] <= upper_bound)]\n\n# Update the 'df' key in the context with the processed DataFrame\ncontext['df'] = df\n\n# Update other context keys that depend on 'df'\nif 'X' in context:\n    context['X'] = df[context['feature_names']]\nif 'y' in context:\n    context['y'] = df[context['target']]\nif 'X_train' in context and 'X_test' in context and 'y_train' in context and 'y_test' in context:\n    from sklearn.model_selection import train_test_split\n    X = context['X']\n    y = context['y']\n    context['X_train'], context['X_test'], context['y_train'], context['y_test'] = train_test_split(X, y, test_size=0.2, random_state=42)\n\nlogger.info(f'Removed outliers from the data using IQR method with multiplier {iqr_multiplier}')\n",
+    "id": "cb33b6f0",
+    "created_at": "2026-01-29T17:58:18.880519"
+  },
+  {
+    "name": "Convolutional Neural Network (CNN) for Image Classification",
+    "type_key": "cnn_image_classification",
+    "description": "Trains a CNN model for image classification tasks",
+    "icon": "\ud83d\udcf8",
+    "color": "#3498db",
+    "category": "models",
+    "param_schema": [
+      {
+        "name": "input_shape",
+        "type": "string",
+        "default": "(28, 28, 1)",
+        "description": "Input shape of the images (height, width, channels)",
+        "options": []
+      },
+      {
+        "name": "num_classes",
+        "type": "number",
+        "default": 10,
+        "description": "Number of classes in the classification problem",
+        "options": []
+      },
+      {
+        "name": "conv_layers",
+        "type": "number",
+        "default": 2,
+        "description": "Number of convolutional layers",
+        "options": []
+      },
+      {
+        "name": "dense_layers",
+        "type": "number",
+        "default": 1,
+        "description": "Number of dense layers",
+        "options": []
+      },
+      {
+        "name": "activation",
+        "type": "select",
+        "default": "relu",
+        "description": "Activation function for the layers",
+        "options": [
+          "relu",
+          "tanh",
+          "sigmoid"
+        ]
+      },
+      {
+        "name": "optimizer",
+        "type": "select",
+        "default": "adam",
+        "description": "Optimizer for the model",
+        "options": [
+          "adam",
+          "sgd",
+          "rmsprop"
+        ]
+      }
+    ],
+    "code": "\nfrom tensorflow.keras.models import Sequential\nfrom tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense\nfrom tensorflow.keras.optimizers import Adam, SGD, RMSprop\n\n# Get parameters\ninput_shape = eval(block.params.get('input_shape', '(28, 28, 1)'))\nnum_classes = block.params.get('num_classes', 10)\nconv_layers = block.params.get('conv_layers', 2)\ndense_layers = block.params.get('dense_layers', 1)\nactivation = block.params.get('activation', 'relu')\noptimizer = block.params.get('optimizer', 'adam')\n\n# Get data\nX_train = context['X_train']\ny_train = context['y_train']\n\n# Create model\nmodel = Sequential()\nfor i in range(conv_layers):\n    model.add(Conv2D(32, (3, 3), activation=activation, input_shape=input_shape))\n    model.add(MaxPooling2D((2, 2)))\nmodel.add(Flatten())\nfor i in range(dense_layers):\n    model.add(Dense(64, activation=activation))\nmodel.add(Dense(num_classes, activation='softmax'))\n\n# Compile model\nif optimizer == 'adam':\n    opt = Adam()\nelif optimizer == 'sgd':\n    opt = SGD()\nelif optimizer == 'rmsprop':\n    opt = RMSprop()\nmodel.compile(loss='sparse_categorical_crossentropy', optimizer=opt, metrics=['accuracy'])\n\n# Train model\nmodel.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)\n\n# Save model to context\ncontext['model'] = model\nlogger.info('CNN model trained and saved to context')",
+    "id": "bca22a00",
+    "created_at": "2026-01-29T18:02:14.249870"
+  },
+  {
+    "name": "Upload Image Data",
+    "type_key": "upload_image_data",
+    "description": "Upload image data for CNN",
+    "icon": "\ud83d\udcf8",
+    "color": "#6495ED",
+    "category": "data",
+    "param_schema": [
+      {
+        "name": "image_path",
+        "type": "string",
+        "default": "",
+        "description": "Path to the image data directory",
+        "options": []
+      },
+      {
+        "name": "target_column",
+        "type": "string",
+        "default": "",
+        "description": "Name of the target column",
+        "options": []
+      },
+      {
+        "name": "image_size",
+        "type": "number",
+        "default": 224,
+        "description": "Size of the images",
+        "options": []
+      }
+    ],
+    "code": "\nfrom PIL import Image\nimport numpy as np\nimport os\n\nimage_path = block.params.get('image_path', '')\ntarget_column = block.params.get('target_column', '')\nimage_size = block.params.get('image_size', 224)\n\nif not image_path:\n    raise ValueError('Image path is required')\n\nif not target_column:\n    raise ValueError('Target column is required')\n\nimages = []\nlabels = []\nfor root, dirs, files in os.walk(image_path):\n    for file in files:\n        if file.endswith('.jpg') or file.endswith('.png'):\n            img = Image.open(os.path.join(root, file))\n            img = img.resize((image_size, image_size))\n            img_array = np.array(img)\n            images.append(img_array)\n            labels.append(root.split('/')[-1])\n\nX = np.array(images)\ny = np.array(labels)\n\ncontext['X'] = X\ncontext['y'] = y\ncontext['target'] = target_column\ncontext['image_size'] = image_size\nlogger.info('Image data uploaded successfully')\n",
+    "id": "8e78d175",
+    "created_at": "2026-01-29T18:04:04.354269"
+  },
+  {
+    "name": "Image Dataset Downloader",
+    "type_key": "image_dataset_downloader",
+    "description": "Downloads an image dataset from an external source",
+    "icon": "\ud83d\udcf8",
+    "color": "#3498db",
+    "category": "data",
+    "param_schema": [
+      {
+        "name": "url",
+        "type": "string",
+        "default": "",
+        "description": "URL of the image dataset to download",
+        "options": []
+      },
+      {
+        "name": "dataset_name",
+        "type": "string",
+        "default": "",
+        "description": "Name of the dataset",
+        "options": []
+      },
+      {
+        "name": "download_path",
+        "type": "string",
+        "default": "./data",
+        "description": "Path to download the dataset",
+        "options": []
+      },
+      {
+        "name": "extract",
+        "type": "boolean",
+        "default": true,
+        "description": "Whether to extract the downloaded dataset",
+        "options": []
+      }
+    ],
+    "code": "\nimport os\nimport requests\nimport zipfile\nimport tarfile\n\nurl = block.params.get('url', '')\ndataset_name = block.params.get('dataset_name', '')\ndownload_path = block.params.get('download_path', './data')\nextract = block.params.get('extract', True)\n\nif not url:\n    raise ValueError('URL is required')\n\nif not dataset_name:\n    raise ValueError('Dataset name is required')\n\nif not os.path.exists(download_path):\n    os.makedirs(download_path)\n\nlogger.info(f'Downloading {dataset_name} from {url}...')\n\nresponse = requests.get(url, stream=True)\nif response.status_code != 200:\n    raise ValueError(f'Failed to download {dataset_name}. Status code: {response.status_code}')\n\nfile_path = os.path.join(download_path, dataset_name)\nwith open(file_path, 'wb') as f:\n    for chunk in response.iter_content(chunk_size=1024):\n        if chunk:\n            f.write(chunk)\n\nlogger.info(f'Downloaded {dataset_name} to {file_path}')\n\nif extract:\n    logger.info(f'Extracting {dataset_name}...')\n    if file_path.endswith('.zip'):\n        with zipfile.ZipFile(file_path, 'r') as zip_ref:\n            zip_ref.extractall(download_path)\n    elif file_path.endswith('.tar.gz') or file_path.endswith('.tar'):\n        with tarfile.TarFile(file_path, 'r') as tar_ref:\n            tar_ref.extractall(download_path)\n    else:\n        raise ValueError(f'Unsupported file format: {file_path}')\n\n    logger.info(f'Extracted {dataset_name} to {download_path}')\n\ncontext['datasets'] = {dataset_name: download_path}\n",
+    "id": "f8554a07",
+    "created_at": "2026-01-29T23:53:48.741562"
+  }
+]

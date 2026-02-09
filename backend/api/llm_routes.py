@@ -17,7 +17,8 @@ from schemas.llm_schema import (
     PipelineSuggestionRequest, PipelineSuggestionResponse
 )
 from llm.groq_client import groq_service
-from llm.prompts import get_chat_prompt, get_eda_prompt, get_feature_prompt, get_model_prompt
+from llm.prompts import get_chat_prompt, get_eda_prompt, get_feature_prompt, get_model_prompt, get_custom_block_prompt
+from custom_blocks.manager import manager as block_manager
 from utils.logger import logger
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
@@ -54,7 +55,7 @@ async def chat(request: ChatRequest):
             {"role": "user", "content": user_prompt}
         ]
 
-        response_text = groq_service.chat(messages)
+        response_text = groq_service.chat(messages, max_tokens=4096, temperature=0.3)
 
         # Try to parse actions from response
         actions = None
@@ -63,14 +64,22 @@ async def chat(request: ChatRequest):
         # Check if response contains JSON with actions
         try:
             import json
-            if "{" in response_text and "actions" in response_text:
+            if "{" in response_text:
                 json_response = groq_service._extract_json(response_text)
-                if "message" in json_response:
-                    message = json_response["message"]
-                if "actions" in json_response and json_response["actions"]:
-                    actions = [ChatAction(**a) for a in json_response["actions"]]
-        except Exception:
-            pass
+                if json_response and not json_response.get("error"):
+                    if "message" in json_response:
+                        message = json_response["message"]
+                    if "actions" in json_response and isinstance(json_response["actions"], list):
+                        parsed_actions = []
+                        for a in json_response["actions"]:
+                            try:
+                                parsed_actions.append(ChatAction(**a))
+                            except Exception as action_err:
+                                logger.warning(f"Failed to parse action: {a}, error: {action_err}")
+                        if parsed_actions:
+                            actions = parsed_actions
+        except Exception as e:
+            logger.warning(f"JSON parsing failed, using plain text response: {e}")
 
         # Store in history
         chat_sessions[session_id].append({"role": "user", "content": request.message})
@@ -362,6 +371,103 @@ async def suggest_pipeline(request: PipelineSuggestionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Custom Block Endpoints ====================
+
+@router.post("/generate-block")
+async def generate_block(request: dict):
+    """
+    Use LLM to generate a custom pipeline block definition from a description.
+    Saves the block and returns the definition.
+    """
+    try:
+        description = request.get("description", "")
+        param_hints = request.get("param_hints", None)
+
+        if not description:
+            raise HTTPException(status_code=400, detail="Description is required")
+
+        system_prompt, user_prompt = get_custom_block_prompt(description, param_hints)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        # Use higher max_tokens for code generation and lower temperature
+        raw_response = groq_service.chat(messages, temperature=0.2, max_tokens=8192)
+        response = groq_service._extract_json(raw_response)
+
+        # Log raw response for debugging
+        logger.info(f"Custom block LLM raw response ({len(raw_response)} chars)")
+
+        # Check if JSON extraction failed
+        if "error" in response and "raw" in response:
+            logger.error(f"JSON extraction failed. Raw: {raw_response[:500]}")
+            raise ValueError(
+                "AI generated a response but it couldn't be parsed as JSON. "
+                "Try rephrasing your description or making it simpler."
+            )
+
+        # Validate required fields
+        required = ["name", "type_key", "description", "code"]
+        missing = [f for f in required if f not in response]
+        if missing:
+            logger.error(f"Missing fields: {missing}. Got keys: {list(response.keys())}")
+            raise ValueError(
+                f"AI response is missing required fields: {', '.join(missing)}. "
+                "Try a simpler description."
+            )
+
+        # Ensure code is a string
+        if not isinstance(response.get("code"), str):
+            response["code"] = str(response["code"])
+
+        # Set defaults for optional fields
+        response.setdefault("icon", "🧩")
+        response.setdefault("color", "#6366f1")
+        response.setdefault("category", "custom")
+        response.setdefault("param_schema", [])
+
+        # Clean param_schema: ensure each entry has required keys
+        cleaned_schema = []
+        for p in response.get("param_schema", []):
+            if isinstance(p, dict) and "name" in p:
+                cleaned_schema.append({
+                    "name": p["name"],
+                    "type": p.get("type", "string"),
+                    "default": p.get("default", ""),
+                    "description": p.get("description", ""),
+                    **({"options": p["options"]} if "options" in p else {})
+                })
+        response["param_schema"] = cleaned_schema
+
+        # Save the block
+        saved = block_manager.save_block(response)
+        logger.info(f"Generated custom block: {saved['name']} ({saved['type_key']})")
+
+        return saved
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Block generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/custom-blocks")
+async def get_custom_blocks():
+    """Return all saved custom block definitions."""
+    return block_manager.load_blocks()
+
+
+@router.delete("/custom-blocks/{block_id}")
+async def delete_custom_block(block_id: str):
+    """Delete a custom block by ID."""
+    deleted = block_manager.delete_block(block_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Custom block not found")
+    return {"status": "deleted", "id": block_id}
+
+
 # ==================== Helper Functions ====================
 
 def compute_data_summary(df: pd.DataFrame, target_column: str = None) -> Dict[str, Any]:
@@ -393,20 +499,58 @@ def compute_data_summary(df: pd.DataFrame, target_column: str = None) -> Dict[st
                 "median": round(float(df[col].median()), 4),
                 "skew": round(float(df[col].skew()), 4) if len(df[col].dropna()) > 2 else 0
             })
+
+            # Histogram bins for distribution chart
+            try:
+                clean = df[col].dropna()
+                if len(clean) > 0:
+                    counts, bin_edges = np.histogram(clean, bins=min(20, max(5, int(len(clean) ** 0.5))))
+                    col_info["histogram"] = {
+                        "counts": counts.tolist(),
+                        "bin_edges": [round(float(b), 4) for b in bin_edges]
+                    }
+                    # Quartiles for box-plot style display
+                    col_info["q25"] = round(float(clean.quantile(0.25)), 4)
+                    col_info["q75"] = round(float(clean.quantile(0.75)), 4)
+            except Exception:
+                pass
         else:
             # Categorical stats
             value_counts = df[col].value_counts()
-            col_info["top_values"] = value_counts.head(5).to_dict()
+            col_info["top_values"] = {str(k): int(v) for k, v in value_counts.head(8).items()}
 
         summary["columns"][col] = col_info
+
+    # Correlation matrix for numeric columns
+    try:
+        numeric_df = df.select_dtypes(include=["number"])
+        if len(numeric_df.columns) >= 2:
+            corr = numeric_df.corr()
+            # Only keep top correlations to avoid huge payloads
+            corr_data = {}
+            for c in corr.columns:
+                corr_data[c] = {str(k): round(float(v), 4) for k, v in corr[c].items()}
+            summary["correlations"] = corr_data
+            summary["correlation_columns"] = list(corr.columns)
+    except Exception:
+        pass
 
     # Target analysis if specified
     if target_column and target_column in df.columns:
         target = df[target_column]
         if target.dtype in ["int64", "float64"] and target.nunique() > 10:
             summary["task_type"] = "regression"
+            # Distribution for target
+            try:
+                counts, bin_edges = np.histogram(target.dropna(), bins=15)
+                summary["target_histogram"] = {
+                    "counts": counts.tolist(),
+                    "bin_edges": [round(float(b), 4) for b in bin_edges]
+                }
+            except Exception:
+                pass
         else:
             summary["task_type"] = "classification"
-            summary["target_distribution"] = target.value_counts().to_dict()
+            summary["target_distribution"] = {str(k): int(v) for k, v in target.value_counts().items()}
 
     return summary

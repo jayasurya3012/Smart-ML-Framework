@@ -1,127 +1,380 @@
 [
   {
-    "id": "3f33ba53",
+    "id": "0cf6d36b",
     "name": "Pipeline 1",
-    "created_at": "2026-01-27T12:41:37.940059",
-    "updated_at": "2026-01-28T00:04:07.518237",
+    "created_at": "2026-02-08T22:20:17.320939",
+    "updated_at": "2026-02-08T22:27:39.252559",
     "data": {
       "nodes": [
         {
-          "id": "split_1769542895074",
+          "id": "dataset_1770614416283_kclz5_0",
           "type": "block",
           "position": {
-            "x": -45.0,
-            "y": 210.0
+            "x": 450.0,
+            "y": 90.0
+          },
+          "data": {
+            "label": "DATASET",
+            "blockType": "dataset",
+            "params": {
+              "file_path": "C:\\Users\\jayas\\Desktop\\Smart-ML-Framework\\backend\\uploads\\634f68aa_dinosaurs.csv",
+              "filename": "dinosaurs.csv",
+              "columns": [
+                "occurrence_no",
+                "name",
+                "diet",
+                "type",
+                "length_m",
+                "max_ma",
+                "min_ma",
+                "region",
+                "lng",
+                "lat",
+                "class",
+                "family"
+              ],
+              "rows": 4951,
+              "target": "class",
+              "suggested_task": "classification",
+              "column_analysis": {
+                "numeric": [
+                  "occurrence_no",
+                  "length_m",
+                  "max_ma",
+                  "min_ma",
+                  "lng",
+                  "lat"
+                ],
+                "categorical": [
+                  "name",
+                  "diet",
+                  "type",
+                  "region",
+                  "class",
+                  "family"
+                ],
+                "boolean": [],
+                "missing": [
+                  "diet",
+                  "type",
+                  "length_m",
+                  "region",
+                  "family"
+                ],
+                "total_missing": 5592
+              }
+            }
+          }
+        },
+        {
+          "id": "split_1770614416283_gx8s3_1",
+          "type": "block",
+          "position": {
+            "x": 400.0,
+            "y": 220.0
           },
           "data": {
             "label": "SPLIT",
             "blockType": "split",
             "params": {
-              "test_size": 0.3
+              "test_size": 0.2,
+              "random_state": 42,
+              "stratify": false
             }
           }
         },
         {
-          "id": "model_1769542895498",
+          "id": "feature_pipeline_1770614416283_enqlw_2",
           "type": "block",
           "position": {
-            "x": 100.0,
+            "x": 400.0,
             "y": 340.0
+          },
+          "data": {
+            "label": "FEATURE PIPELINE",
+            "blockType": "feature_pipeline",
+            "params": {
+              "numeric_strategy": "mean",
+              "scaling": "standard",
+              "handle_unknown": "ignore"
+            }
+          }
+        },
+        {
+          "id": "model_1770614416283_5co0r_3",
+          "type": "block",
+          "position": {
+            "x": 400.0,
+            "y": 460.0
           },
           "data": {
             "label": "MODEL",
             "blockType": "model",
             "params": {
               "task": "classification",
-              "n_estimators": 100,
-              "max_depth": 10
+              "algorithm": "svm",
+              "hyperparameters": {
+                "C": 1,
+                "kernel": "rbf",
+                "gamma": "scale"
+              },
+              "kernel": "poly"
             }
           }
         },
         {
-          "id": "trainer_1769542895940",
+          "id": "trainer_1770614416283_fqzpb_4",
           "type": "block",
           "position": {
-            "x": 390.0,
-            "y": 465.0
+            "x": 400.0,
+            "y": 580.0
           },
           "data": {
             "label": "TRAINER",
             "blockType": "trainer",
             "params": {
-              "fit_params": {}
+              "auto_tune": true,
+              "cv_folds": 3
             }
           }
         },
         {
-          "id": "metrics_1769542896888",
+          "id": "metrics_1770614416283_m2xow_5",
           "type": "block",
           "position": {
-            "x": 100.0,
-            "y": 580.0
+            "x": 400.0,
+            "y": 700.0
           },
           "data": {
             "label": "METRICS",
             "blockType": "metrics",
             "params": {}
           }
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_dataset_1770614416283_kclz5_0_split_1770614416283_gx8s3_1",
+          "source": "dataset_1770614416283_kclz5_0",
+          "target": "split_1770614416283_gx8s3_1",
+          "sourceHandle": null,
+          "targetHandle": null
         },
         {
-          "id": "dataset_1769542929637",
+          "id": "edge_split_1770614416283_gx8s3_1_feature_pipeline_1770614416283_enqlw_2",
+          "source": "split_1770614416283_gx8s3_1",
+          "target": "feature_pipeline_1770614416283_enqlw_2",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge_feature_pipeline_1770614416283_enqlw_2_model_1770614416283_5co0r_3",
+          "source": "feature_pipeline_1770614416283_enqlw_2",
+          "target": "model_1770614416283_5co0r_3",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge_model_1770614416283_5co0r_3_trainer_1770614416283_fqzpb_4",
+          "source": "model_1770614416283_5co0r_3",
+          "target": "trainer_1770614416283_fqzpb_4",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge_trainer_1770614416283_fqzpb_4_metrics_1770614416283_m2xow_5",
+          "source": "trainer_1770614416283_fqzpb_4",
+          "target": "metrics_1770614416283_m2xow_5",
+          "sourceHandle": null,
+          "targetHandle": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "3d7e2d5d",
+    "name": "Pipeline 2",
+    "created_at": "2026-02-08T22:27:51.152196",
+    "updated_at": "2026-02-09T15:28:41.509658",
+    "data": {
+      "nodes": [
+        {
+          "id": "dataset_1770615403855_ensqz_0",
           "type": "block",
           "position": {
-            "x": 15.0,
-            "y": 45.0
+            "x": 400.0,
+            "y": 100.0
           },
           "data": {
             "label": "DATASET",
             "blockType": "dataset",
             "params": {
-              "file_path": "C:\\Users\\jayas\\Desktop\\Smart-ML-Framework\\backend\\uploads\\3ca900fd_diabetes.csv",
-              "filename": "diabetes.csv",
+              "file_path": "C:\\Users\\jayas\\Desktop\\Smart-ML-Framework\\backend\\uploads\\97970ca8_dinosaurs.csv",
+              "filename": "dinosaurs.csv",
               "columns": [
-                "Pregnancies",
-                "Glucose",
-                "BloodPressure",
-                "SkinThickness",
-                "Insulin",
-                "BMI",
-                "DiabetesPedigreeFunction",
-                "Age",
-                "Outcome"
+                "occurrence_no",
+                "name",
+                "diet",
+                "type",
+                "length_m",
+                "max_ma",
+                "min_ma",
+                "region",
+                "lng",
+                "lat",
+                "class",
+                "family"
               ],
-              "rows": 768,
-              "target": "Outcome"
+              "rows": 4951,
+              "target": "class",
+              "suggested_task": "classification",
+              "column_analysis": {
+                "numeric": [
+                  "occurrence_no",
+                  "length_m",
+                  "max_ma",
+                  "min_ma",
+                  "lng",
+                  "lat"
+                ],
+                "categorical": [
+                  "name",
+                  "diet",
+                  "type",
+                  "region",
+                  "class",
+                  "family"
+                ],
+                "boolean": [],
+                "missing": [
+                  "diet",
+                  "type",
+                  "length_m",
+                  "region",
+                  "family"
+                ],
+                "total_missing": 5592
+              }
             }
+          }
+        },
+        {
+          "id": "data_cleaner_1770615403855_rp51t_1",
+          "type": "block",
+          "position": {
+            "x": 400.0,
+            "y": 220.0
+          },
+          "data": {
+            "label": "DATA CLEANER",
+            "blockType": "data_cleaner",
+            "params": {
+              "strategy": "drop_cols",
+              "handle_outliers": false,
+              "missing_threshold": 0.1
+            }
+          }
+        },
+        {
+          "id": "split_1770615403855_3ttn1_2",
+          "type": "block",
+          "position": {
+            "x": 400.0,
+            "y": 340.0
+          },
+          "data": {
+            "label": "SPLIT",
+            "blockType": "split",
+            "params": {
+              "test_size": 0.2,
+              "random_state": 42,
+              "stratify": true
+            }
+          }
+        },
+        {
+          "id": "model_1770615403855_jtj4b_3",
+          "type": "block",
+          "position": {
+            "x": 400.0,
+            "y": 460.0
+          },
+          "data": {
+            "label": "MODEL",
+            "blockType": "model",
+            "params": {
+              "task": "classification",
+              "algorithm": "random_forest",
+              "hyperparameters": {
+                "n_estimators": 100,
+                "max_depth": 10
+              }
+            }
+          }
+        },
+        {
+          "id": "trainer_1770615403855_a49g3_4",
+          "type": "block",
+          "position": {
+            "x": 400.0,
+            "y": 580.0
+          },
+          "data": {
+            "label": "TRAINER",
+            "blockType": "trainer",
+            "params": {
+              "auto_tune": true,
+              "cv_folds": 3
+            }
+          }
+        },
+        {
+          "id": "metrics_1770615403855_ybw30_5",
+          "type": "block",
+          "position": {
+            "x": 400.0,
+            "y": 700.0
+          },
+          "data": {
+            "label": "METRICS",
+            "blockType": "metrics",
+            "params": {}
           }
         }
       ],
       "edges": [
         {
-          "id": "reactflow__edge-split_1769542895074-model_1769542895498",
-          "source": "split_1769542895074",
-          "target": "model_1769542895498",
+          "id": "edge_dataset_1770615403855_ensqz_0_data_cleaner_1770615403855_rp51t_1",
+          "source": "dataset_1770615403855_ensqz_0",
+          "target": "data_cleaner_1770615403855_rp51t_1",
           "sourceHandle": null,
           "targetHandle": null
         },
         {
-          "id": "reactflow__edge-model_1769542895498-trainer_1769542895940",
-          "source": "model_1769542895498",
-          "target": "trainer_1769542895940",
+          "id": "edge_data_cleaner_1770615403855_rp51t_1_split_1770615403855_3ttn1_2",
+          "source": "data_cleaner_1770615403855_rp51t_1",
+          "target": "split_1770615403855_3ttn1_2",
           "sourceHandle": null,
           "targetHandle": null
         },
         {
-          "id": "reactflow__edge-trainer_1769542895940-metrics_1769542896888",
-          "source": "trainer_1769542895940",
-          "target": "metrics_1769542896888",
+          "id": "edge_split_1770615403855_3ttn1_2_model_1770615403855_jtj4b_3",
+          "source": "split_1770615403855_3ttn1_2",
+          "target": "model_1770615403855_jtj4b_3",
           "sourceHandle": null,
           "targetHandle": null
         },
         {
-          "id": "reactflow__edge-dataset_1769542929637-split_1769542895074",
-          "source": "dataset_1769542929637",
-          "target": "split_1769542895074",
+          "id": "edge_model_1770615403855_jtj4b_3_trainer_1770615403855_a49g3_4",
+          "source": "model_1770615403855_jtj4b_3",
+          "target": "trainer_1770615403855_a49g3_4",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge_trainer_1770615403855_a49g3_4_metrics_1770615403855_ybw30_5",
+          "source": "trainer_1770615403855_a49g3_4",
+          "target": "metrics_1770615403855_ybw30_5",
           "sourceHandle": null,
           "targetHandle": null
         }

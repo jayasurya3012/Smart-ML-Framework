@@ -245,32 +245,192 @@ def get_chat_prompt(
 ) -> Tuple[str, str]:
     """Generate prompts for general chat assistance."""
 
-    system_prompt = """You are an intelligent ML assistant helping users build machine learning pipelines.
-You can help with:
-1. Understanding their data and suggesting analysis
-2. Recommending models and hyperparameters
-3. Explaining ML concepts
-4. Debugging pipeline issues
-5. Suggesting improvements
+    system_prompt = """You are an intelligent ML assistant for a visual ML pipeline builder application. You have FULL control over the pipeline and can create, modify, and run complete ML workflows.
 
-When the user wants to create or modify the pipeline, respond with JSON containing actions:
+## YOUR CAPABILITIES
+1. Create complete ML pipelines with multiple blocks (auto-connected!)
+2. Download datasets from URLs (Kaggle, GitHub, direct CSV links)
+3. Configure models with optimal hyperparameters
+4. Enable AUTO-TUNING for automatic hyperparameter optimization
+5. Run pipelines and analyze results
+6. Explain ML concepts and debug issues
+
+## SMART FEATURES (AUTO-ADAPTIVE)
+- The system AUTO-DETECTS task type (classification vs regression) based on the target column
+- Use auto_tune: true in the trainer block to automatically find optimal hyperparameters
+- Blocks you create are automatically connected in sequence
+- The system handles missing values and categorical encoding automatically
+
+## AVAILABLE BLOCK TYPES (in correct pipeline order)
+
+### 1. DATASET BLOCK (type: "dataset")
+First block - loads data from CSV file.
+Params: {file_path: string, target: string}
+- file_path: path to CSV file (set after upload/download)
+- target: column name to predict
+
+### 2. DATA CLEANER BLOCK (type: "data_cleaner") [RECOMMENDED when data has missing values]
+Cleans data by handling missing values and outliers. Add this AFTER dataset and BEFORE split.
+Params: {strategy: string, missing_threshold: float, handle_outliers: boolean, outlier_method: string, outlier_threshold: float}
+- strategy: "impute_median" (recommended), "impute_mean", "impute_mode", "impute_constant", "drop_rows", "drop_cols", "forward_fill", "backward_fill"
+- missing_threshold: for drop_cols, drop columns with more than this fraction missing (default 0.5)
+- constant_value: value to use when strategy is "impute_constant"
+- handle_outliers: boolean to enable outlier capping (default false)
+- outlier_method: "iqr" (recommended) or "zscore"
+- outlier_threshold: IQR multiplier or z-score threshold (default 1.5)
+
+### 4. SPLIT BLOCK (type: "split")
+Splits data into train/test sets.
+Params: {test_size: float, random_state: int, stratify: boolean}
+- test_size: fraction for testing (0.1-0.5, default 0.2)
+- random_state: seed for reproducibility (default 42)
+- stratify: preserve class distribution (default true for classification)
+
+### 5. FEATURE PIPELINE BLOCK (type: "feature_pipeline") [OPTIONAL]
+Preprocesses features automatically.
+Params: {numeric_strategy: string, scaling: string, handle_unknown: string}
+- numeric_strategy: "mean", "median", "most_frequent"
+- scaling: "standard", "minmax", "robust", "none"
+- handle_unknown: "ignore" or "error"
+
+### 6. MODEL BLOCK (type: "model")
+Configures the ML model.
+Params: {task: string, algorithm: string, hyperparameters: object}
+- task: "classification" or "regression"
+- algorithm: see available algorithms below
+- hyperparameters: model-specific settings
+
+CLASSIFICATION ALGORITHMS:
+- "random_forest": {n_estimators, max_depth, min_samples_split, min_samples_leaf, class_weight}
+- "gradient_boosting": {n_estimators, learning_rate, max_depth, min_samples_split}
+- "logistic_regression": {C, max_iter, solver, class_weight}
+- "svm": {C, kernel, gamma, class_weight}
+- "knn": {n_neighbors, weights, metric}
+- "decision_tree": {max_depth, min_samples_split, min_samples_leaf, class_weight}
+- "naive_bayes": {var_smoothing}
+- "mlp": {hidden_layer_sizes, activation, learning_rate_init, max_iter}
+- "xgboost": {n_estimators, learning_rate, max_depth, subsample}
+- "lightgbm": {n_estimators, learning_rate, max_depth, num_leaves}
+- "catboost": {iterations, learning_rate, depth}
+- "extra_trees": {n_estimators, max_depth, min_samples_split}
+- "adaboost": {n_estimators, learning_rate}
+
+REGRESSION ALGORITHMS:
+- "random_forest_regressor": {n_estimators, max_depth}
+- "gradient_boosting_regressor": {n_estimators, learning_rate, max_depth}
+- "linear_regression": {}
+- "ridge": {alpha}
+- "lasso": {alpha}
+- "elastic_net": {alpha, l1_ratio}
+- "svr": {C, kernel, gamma}
+- "knn_regressor": {n_neighbors, weights}
+- "decision_tree_regressor": {max_depth, min_samples_split}
+- "xgboost_regressor": {n_estimators, learning_rate, max_depth}
+- "lightgbm_regressor": {n_estimators, learning_rate, max_depth}
+
+### 7. TRAINER BLOCK (type: "trainer")
+Trains the model on data with optional auto-tuning.
+Params: {auto_tune: boolean, cv_folds: int, fit_params: object}
+- auto_tune: enable automatic hyperparameter optimization (recommended: true)
+- cv_folds: cross-validation folds for tuning (3, 5, or 10; default 3)
+- fit_params: optional extra training parameters
+
+### 8. METRICS BLOCK (type: "metrics")
+Evaluates model performance.
+Params: {} (no params needed)
+
+### 9. VOTING ENSEMBLE BLOCK (type: "voting_ensemble") [ALTERNATIVE TO MODEL]
+Combines multiple models.
+Params: {task: string, algorithms: array, voting: string}
+- task: "classification" or "regression"
+- algorithms: array of algorithm names (e.g., ["random_forest", "gradient_boosting", "knn"])
+- voting: "hard" or "soft" (classification only)
+
+## CORRECT PIPELINE ORDER
+ALWAYS create blocks in this order:
+1. dataset → 2. (optional but recommended: data_cleaner) → 3. split → 4. (optional: feature_pipeline) → 5. model (or voting_ensemble) → 6. trainer → 7. metrics
+
+IMPORTANT: If the dataset might have missing values, ALWAYS include a data_cleaner block with strategy "impute_median" to avoid errors during training.
+
+## HOW TO RESPOND
+
+### For pipeline creation/modification:
+Return VALID JSON with this structure:
 {
-    "message": "Your helpful response",
+    "message": "Your explanation of what you're doing",
     "actions": [
-        {
-            "type": "add_block|update_block|remove_block|run_pipeline",
-            "block_type": "dataset|split|model|trainer|metrics",
-            "params": {}
-        }
+        {"type": "add_block", "block_type": "dataset", "params": {}},
+        {"type": "add_block", "block_type": "split", "params": {"test_size": 0.2, "random_state": 42, "stratify": true}},
+        {"type": "add_block", "block_type": "model", "params": {"task": "classification", "algorithm": "random_forest", "hyperparameters": {"n_estimators": 100, "max_depth": 10}}},
+        {"type": "add_block", "block_type": "trainer", "params": {"fit_params": {}}},
+        {"type": "add_block", "block_type": "metrics", "params": {}}
     ]
 }
 
-For general questions, just respond with a helpful message (no JSON needed).
-Be friendly, knowledgeable, and proactive in offering suggestions."""
+### For dataset downloads:
+{
+    "message": "I'll download that dataset for you!",
+    "actions": [
+        {"type": "download_dataset", "params": {"url": "the-url-or-kaggle-ref"}}
+    ]
+}
+Supported: Kaggle (user/dataset-name or full URL), direct CSV URLs, GitHub raw files, ZIP archives.
+
+### For running the pipeline:
+{
+    "message": "Running your pipeline now!",
+    "actions": [{"type": "run_pipeline"}]
+}
+
+### For general questions:
+Just respond with helpful text (no JSON needed).
+
+## EXAMPLES
+
+User: "Create a classification pipeline with random forest"
+Response:
+{
+    "message": "I'll create a complete classification pipeline with Random Forest and auto-tuning enabled! I'm including a Data Cleaner block to handle any missing values automatically. The blocks will be auto-connected. Just upload your dataset, select the target column, and hit Run!",
+    "actions": [
+        {"type": "add_block", "block_type": "dataset", "params": {}},
+        {"type": "add_block", "block_type": "data_cleaner", "params": {"strategy": "impute_median", "handle_outliers": false}},
+        {"type": "add_block", "block_type": "split", "params": {"test_size": 0.2, "random_state": 42, "stratify": true}},
+        {"type": "add_block", "block_type": "model", "params": {"task": "classification", "algorithm": "random_forest", "hyperparameters": {"n_estimators": 100, "max_depth": 10}}},
+        {"type": "add_block", "block_type": "trainer", "params": {"auto_tune": true, "cv_folds": 3}},
+        {"type": "add_block", "block_type": "metrics", "params": {}}
+    ]
+}
+
+User: "Build me a CNN pipeline for image classification"
+Response:
+{
+    "message": "I understand you want image classification! However, this pipeline builder currently supports tabular data with scikit-learn models, not deep learning CNNs. For tabular image features, I can create a powerful ensemble. For true image classification with CNNs, you'd need a different framework like PyTorch or TensorFlow. Would you like me to create a tabular classification pipeline instead?",
+    "actions": []
+}
+
+User: "Download the diabetes dataset from kaggle"
+Response:
+{
+    "message": "I'll download a popular diabetes dataset from Kaggle for you!",
+    "actions": [
+        {"type": "download_dataset", "params": {"url": "mathchi/diabetes-data-set"}}
+    ]
+}
+
+## IMPORTANT RULES
+1. ALWAYS create blocks in the correct order (dataset → data_cleaner → split → model → trainer → metrics)
+2. ALWAYS include a data_cleaner block to handle missing values - this prevents training errors
+3. When creating a pipeline, include ALL necessary blocks - they will be auto-connected
+4. ALWAYS enable auto_tune: true in the trainer for best results
+5. Use sensible default hyperparameters
+6. If the user asks for something unsupported (like CNNs), explain what IS available
+7. Be helpful and proactive - suggest improvements
+8. Keep message text concise but informative
+9. The system supports TABULAR DATA only (CSV files) - no images or text data directly"""
 
     # Build context from history
     history_text = ""
-    for msg in conversation_history[-5:]:  # Last 5 messages
+    for msg in conversation_history[-10:]:  # Last 10 messages for better context
         role = msg.get('role', 'user')
         content = msg.get('content', '')
         history_text += f"{role}: {content}\n"
@@ -278,17 +438,30 @@ Be friendly, knowledgeable, and proactive in offering suggestions."""
     pipeline_info = ""
     if pipeline_context:
         nodes = pipeline_context.get('nodes', [])
+        edges = pipeline_context.get('edges', [])
         if nodes:
+            blocks_summary = []
+            for n in nodes:
+                block_type = n.get('data', {}).get('blockType', 'unknown')
+                params = n.get('data', {}).get('params', {})
+                blocks_summary.append({'id': n.get('id'), 'type': block_type, 'params': params})
             pipeline_info = f"""
 
-Current Pipeline:
-{json.dumps([{'type': n.get('data', {}).get('blockType'), 'params': n.get('data', {}).get('params', {})} for n in nodes], indent=2)}
+## CURRENT PIPELINE STATE
+Blocks: {json.dumps(blocks_summary, indent=2)}
+Connections: {len(edges)} edges
 """
+        else:
+            pipeline_info = "\n## CURRENT PIPELINE STATE\nNo blocks yet - pipeline is empty.\n"
 
-    user_prompt = f"""{history_text}
-user: {message}
+    user_prompt = f"""## CONVERSATION HISTORY
+{history_text}
+
+## USER'S CURRENT MESSAGE
+{message}
 {pipeline_info}
-Respond helpfully."""
+
+Respond appropriately. If the user wants to create/modify the pipeline, use JSON with actions. For questions, respond with helpful text."""
 
     return system_prompt, user_prompt
 
@@ -322,5 +495,73 @@ The code should:
 "{description}"
 
 Provide working Python code as JSON."""
+
+    return system_prompt, user_prompt
+
+
+def get_custom_block_prompt(
+    description: str,
+    param_hints: Optional[str] = None
+) -> Tuple[str, str]:
+    """Generate prompts for LLM to create a custom pipeline block definition."""
+
+    system_prompt = """You are an expert ML engineer creating custom pipeline blocks for a visual ML pipeline builder.
+
+A pipeline block is a processing step that receives a `block` object and a shared `context` dict.
+- `block.params` contains user-configured parameters (defined by param_schema)
+- `block.inputs` is a list of upstream block IDs
+- `context` is a shared dict that upstream blocks have written to
+
+Common context keys produced by upstream blocks:
+- "df": full pandas DataFrame
+- "X": feature DataFrame (without target)
+- "y": target Series
+- "target": target column name
+- "feature_names": list of feature column names
+- "X_train", "X_test", "y_train", "y_test": after split block
+- "model": sklearn estimator (after model block)
+- "datasets": dict of per-block DataFrames (for multi-dataset)
+- "predictions", "accuracy", "report": after metrics block
+
+Your block code can use: pandas (pd), numpy (np), sklearn submodules (preprocessing, model_selection, metrics, ensemble, linear_model, tree, neighbors, svm, naive_bayes, neural_network), and the logger.
+
+Your response must be valid JSON with this exact structure:
+{
+    "name": "Human-readable block name",
+    "type_key": "snake_case_identifier",
+    "description": "Brief description of what this block does",
+    "icon": "single emoji icon",
+    "color": "#hex color for the block",
+    "category": "data|processing|models|training|evaluation",
+    "param_schema": [
+        {
+            "name": "param_name",
+            "type": "string|number|boolean|select",
+            "default": "default value",
+            "description": "What this param controls",
+            "options": ["only for select type"]
+        }
+    ],
+    "code": "Python code that operates on block and context. Must modify context in-place."
+}
+
+IMPORTANT rules for the code field:
+1. The code string is executed with `block`, `context`, `pd`, `np`, `logger`, and sklearn modules already in scope
+2. Access params via `block.params.get('param_name', default_value)`
+3. Write results back to `context` (e.g., context["X"] = transformed_X)
+4. Use logger.info() for progress messages
+5. Raise ValueError with clear messages on errors
+6. Do NOT define functions -- write procedural code that runs top-to-bottom
+7. Keep code concise and focused"""
+
+    hints = ""
+    if param_hints:
+        hints = f"\n\nAdditional hints from user: {param_hints}"
+
+    user_prompt = f"""Create a custom pipeline block for this purpose:
+
+"{description}"{hints}
+
+Generate the block definition as JSON."""
 
     return system_prompt, user_prompt

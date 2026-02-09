@@ -14,19 +14,26 @@ def execute_feature_block(block, context):
     ])
 
     categorical_pipe = Pipeline([
-        ("encoder", OneHotEncoder(handle_unknown="ignore"))
+        ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False))
     ])
 
-    transformer = ColumnTransformer([
-        ("num", numeric_pipe, num_cols),
-        ("cat", categorical_pipe, cat_cols)
-    ])
+    transformers = []
+    if len(num_cols) > 0:
+        transformers.append(("num", numeric_pipe, num_cols))
+    if len(cat_cols) > 0:
+        transformers.append(("cat", categorical_pipe, cat_cols))
+
+    if not transformers:
+        return context
+
+    transformer = ColumnTransformer(transformers)
 
     X_train_t = transformer.fit_transform(X_train)
     X_test_t = transformer.transform(X_test)
 
-    context.update({
-        "X_train_t": X_train_t,
-        "X_test_t": X_test_t,
-        "feature_pipeline": transformer
-    })
+    # Overwrite X_train / X_test so downstream blocks (trainer, metrics) use preprocessed data
+    context["X_train"] = X_train_t
+    context["X_test"] = X_test_t
+    context["feature_pipeline"] = transformer
+
+    return context

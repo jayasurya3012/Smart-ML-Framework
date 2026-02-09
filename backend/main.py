@@ -14,8 +14,10 @@ import joblib
 import os
 import uuid
 
-# Import LLM router
+# Import routers
 from api.llm_routes import router as llm_router
+from api.inspector_routes import router as inspector_router
+from data_engine.downloader import detect_source, download_direct_csv, download_kaggle_dataset, download_zip
 
 app = FastAPI(title="Smart ML Framework", version="1.0.0")
 
@@ -41,8 +43,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include LLM router
+# Include routers
 app.include_router(llm_router)
+app.include_router(inspector_router)
+
+
+def detect_task_type(df: pd.DataFrame, target_col: str) -> str:
+    """Auto-detect if task is classification or regression based on target column."""
+    if target_col not in df.columns:
+        return "classification"  # default
+
+    target = df[target_col]
+
+    # If target is object/string type, it's classification
+    if target.dtype == 'object' or target.dtype.name == 'category':
+        return "classification"
+
+    # If target is boolean, it's classification
+    if target.dtype == 'bool':
+        return "classification"
+
+    # For numeric columns, check unique value ratio
+    n_unique = target.nunique()
+    n_total = len(target)
+
+    # If few unique values relative to total, likely classification
+    # Rule: if <= 20 unique values OR unique ratio < 5%, treat as classification
+    if n_unique <= 20 or (n_unique / n_total) < 0.05:
+        return "classification"
+
+    return "regression"
+
+
+def get_column_types(df: pd.DataFrame) -> dict:
+    """Analyze column types for smart preprocessing."""
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    boolean_cols = df.select_dtypes(include=['bool']).columns.tolist()
+
+    # Detect columns with missing values
+    missing_cols = df.columns[df.isnull().any()].tolist()
+
+    return {
+        "numeric": numeric_cols,
+        "categorical": categorical_cols,
+        "boolean": boolean_cols,
+        "missing": missing_cols,
+        "total_missing": int(df.isnull().sum().sum())
+    }
 
 
 @app.post("/upload")
@@ -76,8 +124,12 @@ async def upload_file(file: UploadFile = File(...)):
         if not suggested_target and len(columns) > 0:
             suggested_target = columns[-1]  # Default to last column
 
+        # Auto-detect task type and column types
+        suggested_task = detect_task_type(df, suggested_target) if suggested_target else "classification"
+        column_analysis = get_column_types(df)
+
         logger.info(f"Uploaded file: {file.filename} -> {file_path}")
-        logger.info(f"Columns: {columns}")
+        logger.info(f"Columns: {columns}, Task: {suggested_task}")
 
         return {
             "status": "success",
@@ -85,6 +137,8 @@ async def upload_file(file: UploadFile = File(...)):
             "filename": file.filename,
             "columns": columns,
             "suggested_target": suggested_target,
+            "suggested_task": suggested_task,
+            "column_analysis": column_analysis,
             "rows": len(df),
             "preview": df.head(5).to_dict(orient="records")
         }
@@ -115,6 +169,40 @@ def list_uploads():
             except:
                 pass
     return {"files": files}
+
+
+# ==================== Dataset Download ====================
+
+class DatasetDownloadRequest(BaseModel):
+    url: str
+    selected_file: Optional[str] = None
+
+
+@app.post("/download-dataset")
+async def download_dataset(request: DatasetDownloadRequest):
+    """Download a dataset from a URL (Kaggle, direct CSV, ZIP) and return file info."""
+    try:
+        url = request.url.strip()
+        if not url:
+            raise HTTPException(status_code=400, detail="URL is required")
+
+        source = detect_source(url)
+        logger.info(f"Dataset download request: source={source}, url={url}")
+
+        if source == "kaggle":
+            return download_kaggle_dataset(url, request.selected_file)
+        elif source == "zip_url":
+            return download_zip(url, request.selected_file)
+        else:
+            return download_direct_csv(url)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Dataset download failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
 # ==================== Session Endpoints ====================
@@ -176,6 +264,15 @@ def delete_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     logger.info(f"Deleted session: {session_id}")
     return {"status": "deleted", "id": session_id}
+
+
+# ==================== Available Models Endpoint ====================
+
+@app.get("/available-models")
+def available_models(task: str = "classification"):
+    """List all available ML algorithms for a given task type."""
+    from model_engine.random_forest import get_available_models
+    return {"models": get_available_models(task)}
 
 
 # ==================== Pipeline Endpoints ====================
@@ -301,6 +398,9 @@ def predict(filename: str, request: PredictRequest):
         model_data = joblib.load(file_path)
         model = model_data["model"]
         feature_names = model_data.get("feature_names", [])
+        feature_pipeline = model_data.get("feature_pipeline")
+        numeric_imputer = model_data.get("numeric_imputer")
+        label_encoder = model_data.get("label_encoder")
 
         # Convert input features to DataFrame
         df = pd.DataFrame(request.features)
@@ -315,17 +415,29 @@ def predict(filename: str, request: PredictRequest):
                 )
             df = df[feature_names]
 
+        # Apply preprocessing if available
+        if feature_pipeline is not None:
+            X = feature_pipeline.transform(df)
+        elif numeric_imputer is not None:
+            X = numeric_imputer.transform(df.values)
+        else:
+            X = df
+
         # Make predictions
-        predictions = model.predict(df)
+        predictions = model.predict(X)
 
         # Get probabilities for classification
         probabilities = None
         if hasattr(model, "predict_proba"):
             try:
-                proba = model.predict_proba(df)
+                proba = model.predict_proba(X)
                 probabilities = proba.tolist()
             except:
                 pass
+
+        # Decode labels if label encoder was used
+        if label_encoder is not None:
+            predictions = label_encoder.inverse_transform(predictions)
 
         return {
             "predictions": predictions.tolist(),

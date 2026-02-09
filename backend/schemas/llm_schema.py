@@ -22,7 +22,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatAction(BaseModel):
-    type: Literal["add_block", "update_block", "remove_block", "run_pipeline", "run_eda"]
+    type: Literal["add_block", "update_block", "remove_block", "run_pipeline", "run_eda", "download_dataset"]
     block_type: Optional[str] = None
     block_id: Optional[str] = None
     params: Optional[Dict[str, Any]] = None
