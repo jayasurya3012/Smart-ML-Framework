@@ -1,15 +1,27 @@
 import { useState, useRef, useEffect } from "react";
 import type { Node, Edge } from "reactflow";
 import { sendChatMessage, runEDAAnalysis } from "../services/llmApi";
-import type { ChatMessage, ChatAction, EDAResponse, EDAInsight } from "../services/llmApi";
+import type { ChatMessage, ChatAction, EDAResponse } from "../services/llmApi";
+
+interface BlockConfig {
+  type: string;
+  params?: Record<string, any>;
+}
 
 interface Props {
   nodes: Node[];
   edges: Edge[];
   onAddBlock: (type: string, params?: Record<string, any>) => void;
+  onBuildPipeline: (blocks: BlockConfig[]) => void;  // Build complete pipeline with auto-connections
   onRunPipeline: () => void;
+  onDownloadDataset?: (url: string) => void;
   datasetFilePath?: string;
   targetColumn?: string;
+  // Persistent chat state (lifted to parent)
+  messages: ChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  chatSessionId: string | null;
+  setChatSessionId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const styles = {
@@ -210,19 +222,18 @@ export default function ChatPanel({
   nodes,
   edges,
   onAddBlock,
+  onBuildPipeline,
   onRunPipeline,
+  onDownloadDataset,
   datasetFilePath,
-  targetColumn
+  targetColumn,
+  messages,
+  setMessages,
+  chatSessionId,
+  setChatSessionId
 }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content: "Hi! I'm your ML assistant. I can help you build pipelines, analyze data, and suggest models. What would you like to do?"
-    }
-  ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [edaResults, setEdaResults] = useState<EDAResponse | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -242,11 +253,11 @@ export default function ChatPanel({
     try {
       const response = await sendChatMessage({
         message: userMessage,
-        session_id: sessionId || undefined,
+        session_id: chatSessionId || undefined,
         pipeline_context: { nodes, edges }
       });
 
-      setSessionId(response.session_id);
+      setChatSessionId(response.session_id);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: response.message }
@@ -269,19 +280,36 @@ export default function ChatPanel({
     }
   };
 
-  const executeActions = (actions: ChatAction[]) => {
-    for (const action of actions) {
+  const executeActions = async (actions: ChatAction[]) => {
+    // Collect all add_block actions to build as a connected pipeline
+    const blockActions = actions.filter(a => a.type === "add_block" && a.block_type);
+    const otherActions = actions.filter(a => a.type !== "add_block");
+
+    // If multiple blocks, build them as a connected pipeline
+    if (blockActions.length > 1) {
+      const blocks: BlockConfig[] = blockActions.map(a => ({
+        type: a.block_type!,
+        params: a.params
+      }));
+      onBuildPipeline(blocks);
+    } else if (blockActions.length === 1) {
+      // Single block - just add it
+      onAddBlock(blockActions[0].block_type!, blockActions[0].params);
+    }
+
+    // Process other actions
+    for (const action of otherActions) {
       switch (action.type) {
-        case "add_block":
-          if (action.block_type) {
-            onAddBlock(action.block_type, action.params);
-          }
-          break;
         case "run_pipeline":
           onRunPipeline();
           break;
         case "run_eda":
           handleRunEDA();
+          break;
+        case "download_dataset":
+          if (action.params?.url && onDownloadDataset) {
+            onDownloadDataset(action.params.url);
+          }
           break;
       }
     }

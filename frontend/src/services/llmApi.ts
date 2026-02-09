@@ -13,7 +13,7 @@ export interface ChatMessage {
 }
 
 export interface ChatAction {
-  type: "add_block" | "update_block" | "remove_block" | "run_pipeline" | "run_eda";
+  type: "add_block" | "update_block" | "remove_block" | "run_pipeline" | "run_eda" | "download_dataset";
   block_type?: string;
   block_id?: string;
   params?: Record<string, any>;

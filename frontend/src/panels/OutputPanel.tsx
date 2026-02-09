@@ -369,6 +369,7 @@ function generatePythonCode(nodes: Node[], edges: Edge[]): string {
   lines.push("import pandas as pd");
   lines.push("from sklearn.model_selection import train_test_split");
   lines.push("from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor");
+  lines.push("from sklearn.ensemble import VotingClassifier, VotingRegressor");
   lines.push("from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score");
   lines.push("from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score");
   lines.push("");
@@ -400,11 +401,48 @@ function generatePythonCode(nodes: Node[], edges: Edge[]): string {
         lines.push("");
         break;
       }
+      case "dataset_merge": {
+        const strategy = params?.strategy || "concat";
+        lines.push("# === MERGE DATASETS ===");
+        if (strategy === "concat") {
+          lines.push("# Concatenate multiple DataFrames vertically");
+          lines.push("# df = pd.concat([df1, df2, ...], ignore_index=True)");
+          lines.push("# X = df.drop(columns=[TARGET_COLUMN])");
+          lines.push("# y = df[TARGET_COLUMN]");
+        } else {
+          const joinKey = params?.join_key || "id";
+          lines.push(`JOIN_KEY = "${joinKey}"`);
+          lines.push("# Merge DataFrames on key column");
+          lines.push("# df = pd.merge(df1, df2, on=JOIN_KEY, how='inner')");
+          lines.push("# X = df.drop(columns=[TARGET_COLUMN])");
+          lines.push("# y = df[TARGET_COLUMN]");
+        }
+        lines.push("");
+        break;
+      }
+      case "feature_pipeline": {
+        lines.push("# === FEATURE PREPROCESSING ===");
+        lines.push("from sklearn.preprocessing import StandardScaler, OneHotEncoder");
+        lines.push("from sklearn.compose import ColumnTransformer");
+        lines.push("");
+        lines.push("num_cols = X_train.select_dtypes(include='number').columns");
+        lines.push("cat_cols = X_train.select_dtypes(exclude='number').columns");
+        lines.push("preprocessor = ColumnTransformer([");
+        lines.push("    ('num', StandardScaler(), num_cols),");
+        lines.push("    ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), cat_cols)");
+        lines.push("])");
+        lines.push("X_train = preprocessor.fit_transform(X_train)");
+        lines.push("X_test = preprocessor.transform(X_test)");
+        lines.push("");
+        break;
+      }
       case "model": {
         taskType = params?.task || "classification";
+        const algo = params?.algorithm || "random_forest";
         const cls = taskType === "classification" ? "RandomForestClassifier" : "RandomForestRegressor";
         lines.push("# === MODEL CONFIG ===");
         lines.push(`TASK_TYPE = "${taskType}"`);
+        lines.push(`ALGORITHM = "${algo}"`);
         lines.push(`N_ESTIMATORS = ${params?.n_estimators ?? 100}`);
         lines.push(`MAX_DEPTH = ${params?.max_depth ?? 10}`);
         lines.push("");
@@ -412,6 +450,29 @@ function generatePythonCode(nodes: Node[], edges: Edge[]): string {
         lines.push("    n_estimators=N_ESTIMATORS,");
         lines.push("    max_depth=MAX_DEPTH,");
         lines.push("    random_state=42)");
+        lines.push("");
+        break;
+      }
+      case "voting_ensemble": {
+        taskType = params?.task || "classification";
+        const algos: string[] = params?.algorithms || ["random_forest", "gradient_boosting", "knn"];
+        const voting = params?.voting || "hard";
+        lines.push("# === VOTING ENSEMBLE CONFIG ===");
+        lines.push(`TASK_TYPE = "${taskType}"`);
+        lines.push(`VOTING = "${voting}"`);
+        lines.push("");
+        lines.push("# Define estimators for ensemble");
+        lines.push("estimators = [");
+        for (const algo of algos) {
+          lines.push(`    ("${algo}", ...),  # Configure ${algo.replace(/_/g, " ")}`);
+        }
+        lines.push("]");
+        lines.push("");
+        if (taskType === "classification") {
+          lines.push(`model = VotingClassifier(estimators=estimators, voting=VOTING)`);
+        } else {
+          lines.push("model = VotingRegressor(estimators=estimators)");
+        }
         lines.push("");
         break;
       }

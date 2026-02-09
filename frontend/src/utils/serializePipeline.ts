@@ -20,10 +20,19 @@ export function serializePipeline(nodes: Node[], edges: Edge[]): SerializedBlock
     inputsMap[edge.target].push(edge.source);
   }
 
-  return nodes.map((node) => ({
-    id: node.id,
-    type: node.data.blockType,
-    params: node.data.params || {},
-    inputs: inputsMap[node.id] || []
-  }));
+  // Only include nodes that participate in at least one edge (skip floating blocks)
+  const connectedNodeIds = new Set<string>();
+  for (const edge of edges) {
+    connectedNodeIds.add(edge.source);
+    connectedNodeIds.add(edge.target);
+  }
+
+  return nodes
+    .filter((node) => connectedNodeIds.has(node.id))
+    .map((node) => ({
+      id: node.id,
+      type: node.data.blockType,
+      params: node.data.params || {},
+      inputs: inputsMap[node.id] || []
+    }));
 }
